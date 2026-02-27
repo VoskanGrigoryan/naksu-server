@@ -12,6 +12,11 @@ enum UserRole {
   MEMBER
 }
 
+enum AuthProviderType {
+  LOCAL
+  GOOGLE
+}
+
 enum EnrollmentStatus {
   CONFIRMED
   CANCELLED
@@ -42,6 +47,8 @@ model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   passwordHash String?
+  isActive     Boolean  @default(true)
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -55,6 +62,7 @@ model User {
   payments      Payment[]
 
   @@index([email])
+  @@index([isActive])
 }
 
 model UserRoleAssignment {
@@ -69,11 +77,11 @@ model UserRoleAssignment {
 }
 
 model AuthProvider {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  provider   String   // "local" | "google"
-  providerId String?  // google sub (null for local)
-  createdAt  DateTime @default(now())
+  id         String            @id @default(uuid()) @db.Uuid
+  userId     String            @db.Uuid
+  provider   AuthProviderType
+  providerId String?           // required for GOOGLE, null for LOCAL
+  createdAt  DateTime          @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -86,8 +94,9 @@ model MembershipPlan {
   id           String   @id @default(uuid()) @db.Uuid
   name         String   @unique
   description  String?
-  price        Decimal
+  price        Decimal  @db.Decimal(10, 2)
   durationDays Int
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -99,8 +108,10 @@ model Membership {
   userId    String           @db.Uuid
   planId    String           @db.Uuid
   status    MembershipStatus
+
   startDate DateTime         @db.Date
   endDate   DateTime?        @db.Date
+
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -116,9 +127,11 @@ model Payment {
   id           String        @id @default(uuid()) @db.Uuid
   userId       String        @db.Uuid
   membershipId String?       @db.Uuid
-  amount       Decimal
+
+  amount       Decimal       @db.Decimal(10, 2)
   status       PaymentStatus
   providerRef  String?
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -126,11 +139,13 @@ model Payment {
   membership Membership? @relation(fields: [membershipId], references: [id])
 
   @@index([userId])
+  @@index([status])
 }
 
 model ClassType {
   id        String   @id @default(uuid()) @db.Uuid
   name      String   @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -140,22 +155,26 @@ model ClassType {
 model Event {
   id           String      @id @default(uuid()) @db.Uuid
   title        String
+
   instructorId String      @db.Uuid
   classTypeId  String      @db.Uuid
+  createdBy    String      @db.Uuid
+
   startTime    DateTime
   endTime      DateTime
   capacity     Int
   status       EventStatus
-  createdBy    String      @db.Uuid
+
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  instructor  User              @relation("EventsTaught", fields: [instructorId], references: [id])
-  creator     User              @relation("EventsCreated", fields: [createdBy], references: [id])
-  classType   ClassType         @relation(fields: [classTypeId], references: [id])
+  instructor  User      @relation("EventsTaught", fields: [instructorId], references: [id])
+  creator     User      @relation("EventsCreated", fields: [createdBy], references: [id])
+  classType   ClassType @relation(fields: [classTypeId], references: [id])
   enrollments EventEnrollment[]
 
   @@index([startTime])
+  @@index([status])
   @@index([instructorId])
   @@index([classTypeId])
 }
@@ -165,6 +184,7 @@ model EventEnrollment {
   eventId   String           @db.Uuid
   userId    String           @db.Uuid
   status    EnrollmentStatus
+
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
