@@ -1,14 +1,177 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  INSTRUCTOR
+  MEMBER
+}
+
+enum EnrollmentStatus {
+  CONFIRMED
+  CANCELLED
+  WAITLIST
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum EventStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles         UserRoleAssignment[]
+  authProviders AuthProvider[]
+
+  memberships   Membership[]
+  enrollments   EventEnrollment[]
+  eventsCreated Event[]           @relation("EventsCreated")
+  eventsTaught  Event[]           @relation("EventsTaught")
+  payments      Payment[]
+
+  @@index([email])
+}
+
+model UserRoleAssignment {
+  id     String   @id @default(uuid()) @db.Uuid
+  userId String   @db.Uuid
+  role   UserRole
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+}
+
+model AuthProvider {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  provider   String   // "local" | "google"
+  providerId String?  // google sub (null for local)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model MembershipPlan {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique
+  description  String?
+  price        Decimal
+  durationDays Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships Membership[]
+}
+
+model Membership {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  planId    String           @db.Uuid
+  status    MembershipStatus
+  startDate DateTime         @db.Date
+  endDate   DateTime?        @db.Date
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan     MembershipPlan @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @db.Uuid
+  membershipId String?       @db.Uuid
+  amount       Decimal
+  status       PaymentStatus
+  providerRef  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership Membership? @relation(fields: [membershipId], references: [id])
+
+  @@index([userId])
+}
+
+model ClassType {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+}
+
+model Event {
+  id           String      @id @default(uuid()) @db.Uuid
+  title        String
+  instructorId String      @db.Uuid
+  classTypeId  String      @db.Uuid
+  startTime    DateTime
+  endTime      DateTime
+  capacity     Int
+  status       EventStatus
+  createdBy    String      @db.Uuid
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  instructor  User              @relation("EventsTaught", fields: [instructorId], references: [id])
+  creator     User              @relation("EventsCreated", fields: [createdBy], references: [id])
+  classType   ClassType         @relation(fields: [classTypeId], references: [id])
+  enrollments EventEnrollment[]
+
+  @@index([startTime])
+  @@index([instructorId])
+  @@index([classTypeId])
+}
+
+model EventEnrollment {
+  id        String           @id @default(uuid()) @db.Uuid
+  eventId   String           @db.Uuid
+  userId    String           @db.Uuid
+  status    EnrollmentStatus
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
